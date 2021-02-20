@@ -22,21 +22,10 @@ class FlaskApi:
         pass
 
     def __init__(self, app=None, *args, **kwargs):
-        self._setup_csrf()
-
         if app:
             self.init_app(app, **kwargs)
         else:
             self._set_options(**kwargs)
-
-    def _setup_csrf(self):
-        try:
-            from flask_wtf.csrf import CSRFProtect
-            self._csrf = CSRFProtect()
-            self.csrf_exempt = self._csrf.exempt
-        except ImportError:
-            self._csrf = None
-            self.csrf_exempt = lambda x: True
 
     def _set_options(self, **options):
         self.serializer = options.pop(
@@ -51,8 +40,7 @@ class FlaskApi:
         self._app = app
         self._set_options(**kwargs)
 
-        if self.csrf_protect:
-            self._csrf.init_app(self._app)
+        self._setup_csrf()
 
         def make_response(rv):
             if isinstance(rv, ApiResult):
@@ -66,6 +54,19 @@ class FlaskApi:
             return error.to_response(serializer=self.serializer)
 
         self._create_generic_api_routes()
+
+    def _setup_csrf(self):
+        self._csrf = None
+        self.csrf_exempt = lambda x: True
+        if self.csrf_protect:
+            try:
+                from flask_wtf.csrf import CSRFProtect
+                self._csrf = CSRFProtect()
+                if self.csrf_protect:
+                    self._csrf.init_app(self._app)
+                    self.csrf_exempt = self._csrf.exempt
+            except ImportError:
+                self.csrf_protect = False
 
     def _create_generic_api_routes(self):
         @self._app.route("/api/")
@@ -110,7 +111,10 @@ class FlaskApi:
             def validated(*args, **kwargs):
                 validator(**options)
                 return f(*args, **kwargs)
-            return self.csrf_exempt(validated)
+            if self.csrf_protect:
+                return self.csrf_exempt(validated)
+            else:
+                return validated
         return decorated
 
     def encrypt_response(self, service, **options):
