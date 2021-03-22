@@ -1,13 +1,15 @@
 from flask import Flask, after_this_request
-from collections import defaultdict
 from functools import wraps
 from .blueprints import ApiBlueprint, use_api_errors
-from .responses import ApiResult, ApiException, ApiFileResult
+from .responses import ApiResult, ApiException, ApiFileResult, ApiAsyncJob
+from .routes import create_generic_api_routes
 
 
 class FlaskApi:
     serializer = None
     csrf_protect = True
+
+    hidden_routes = ['/api/hidden']
 
     def Blueprint(self, *args, **kwargs):
         return ApiBlueprint(*args, api_instance=self, **kwargs)
@@ -19,6 +21,9 @@ class FlaskApi:
         pass
 
     class FileResult(ApiFileResult):
+        pass
+
+    class AsyncJob(ApiAsyncJob):
         pass
 
     def __init__(self, app=None, *args, **kwargs):
@@ -49,11 +54,7 @@ class FlaskApi:
 
         self._app.make_response = make_response
 
-        @self._app.errorhandler(ApiException)
-        def err_api(error):
-            return error.to_response(serializer=self.serializer)
-
-        self._create_generic_api_routes()
+        create_generic_api_routes(self, self._app)
 
     def _setup_csrf(self):
         self._csrf = None
@@ -67,40 +68,6 @@ class FlaskApi:
                     self.csrf_exempt = self._csrf.exempt
             except ImportError:
                 self.csrf_protect = False
-
-    def _create_generic_api_routes(self):
-        @self._app.route("/api/")
-        def api_map():
-            try:
-                api_urls = defaultdict(dict)
-                for rule in self._app.url_map.iter_rules():
-                    url = rule.rule
-                    if not url.startswith('/api'):
-                        continue
-                    if rule.endpoint.endswith('404'):
-                        continue
-                    if rule.endpoint.endswith('_redirect'):
-                        continue
-                    if url.startswith('/api/hidden'):
-                        continue
-                    endpoint = rule.endpoint.split('.', 1)
-                    if len(endpoint) == 1:
-                        api_urls[rule.endpoint] = {
-                            'url': url,
-                            'methods': list(rule.methods)
-                        }
-                    else:
-                        api_urls[endpoint[0]][endpoint[1]] = {
-                            'url': url,
-                            'methods': list(rule.methods)
-                        }
-                return self.Result({'endpoints': api_urls})
-            except Exception as e:
-                return self.Exception(str(e))
-
-        @self._app.route("/api/<path:dummy>/")
-        def api_404(dummy=None):
-            raise self.Exception('Not Found', 404)
 
     def use_api_errors(self, blueprint):
         use_api_errors(self, blueprint)

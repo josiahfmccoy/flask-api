@@ -2,10 +2,18 @@ import json
 import os
 import shutil
 import threading
+import traceback
 import time
-from flask import Response, url_for, current_app, after_this_request
+from flask import Response, url_for, current_app, after_this_request, \
+    copy_current_request_context
+from functools import wraps
 from uuid import uuid4
 from .utils.tempfiles import MAX_CLEANUP_TRIES
+
+__all__ = [
+    'ApiResult', 'ApiException',
+    'ApiFileResult', 'ApiAsyncJob'
+]
 
 
 # Cf https://www.youtube.com/watch?v=1ByQhAM5c1I
@@ -88,3 +96,44 @@ class ApiFileResult(ApiResult):
 
             threading.Thread(target=cleanup_tempfile).start()
             return response
+
+
+class ApiAsyncJob:
+    def __init__(self, target, args=(), kwargs={}):
+        job_id = str(uuid4())
+
+        @wraps(target)
+        @copy_current_request_context
+        def async_target(*args, **kwargs):
+            try:
+                data = {
+                    'status': 'complete',
+                    'data': target(*args, **kwargs)
+                }
+            except Exception:
+                data = {
+                    'status': 'complete',
+                    'error': traceback.format_exc()
+                }
+
+            if data.get('data') or data.get('error'):
+                fpath = job_path(job_id)
+                if not os.path.isdir(os.path.dirname(fpath)):
+                    os.makedirs(os.path.dirname(fpath))
+                with open(fpath, 'w') as f:
+                    json.dump(data, f)
+
+        self._thread = threading.Thread(target=async_target, args=args, kwargs=kwargs)
+        self._job_id = job_id
+
+    @property
+    def job_id(self):
+        return self._job_id
+
+    def run(self):
+        self._thread.start()
+        return self.job_id
+
+
+def job_path(job_id):
+    return os.path.join(current_app.static_folder, f'./temp/{job_id}.json')
