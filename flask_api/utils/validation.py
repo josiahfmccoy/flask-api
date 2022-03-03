@@ -1,6 +1,8 @@
 import jwt
 from flask import request
 
+__all__ = ['get_jwt']
+
 
 def get_jwt(jwt_name='token', decoded=False, algorithms=['HS512']):
 
@@ -20,7 +22,8 @@ def get_jwt(jwt_name='token', decoded=False, algorithms=['HS512']):
 
     try:
         return jwt.decode(
-            token, verify=False, algorithms=algorithms
+            token, algorithms=algorithms,
+            options={"verify_signature": False}
         )
     except Exception:
         return None

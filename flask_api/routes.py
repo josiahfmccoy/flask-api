@@ -3,6 +3,8 @@ import os
 from collections import defaultdict
 from .responses import ApiResult, ApiException, job_path
 
+__all__ = ['create_generic_api_routes']
+
 
 def create_generic_api_routes(api, app):
     @app.errorhandler(ApiException)

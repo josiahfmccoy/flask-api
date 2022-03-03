@@ -4,6 +4,8 @@ from .blueprints import ApiBlueprint, use_api_errors
 from .responses import ApiResult, ApiException, ApiFileResult, ApiAsyncJob
 from .routes import create_generic_api_routes
 
+__all__ = ['FlaskApi']
+
 
 class FlaskApi:
     serializer = None

@@ -5,6 +5,8 @@ import time
 from flask import request
 from functools import wraps
 
+__all__ = ['with_tempdir']
+
 
 MAX_CLEANUP_TRIES = 5
 
